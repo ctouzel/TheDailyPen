@@ -9,12 +9,21 @@
 function BuildTwitterAuthorizationHeader($oauth) 
 {
     $r = 'Authorization: OAuth ';
-    $values = array();
-    foreach($oauth as $key=>$value)
-	{
-        $values[] = "$key=\"" . rawurlencode($value) . "\"";
-	}
-    $r .= implode(', ', $values);
+    try
+    {
+        $values = array();
+        foreach ($oauth as $key => $value) {
+            $values[] = "$key=\"" . rawurlencode($value) . "\"";
+        }
+        $r .= implode(', ', $values);
+    }
+    catch (Exception $e)
+    {
+        $lognow = new DateTime();
+        $lognow->setTimezone(new DateTimeZone('America/Montreal'));
+        $GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')."
+            - ERROR - Unable to build twitter authorization header (".$e->getMessage().")</p>";
+    }
     return $r;
 }
 
@@ -101,14 +110,33 @@ function GetRandomItemFromXML($customXML)
 function GetRandomQuote()
 {
 	$retval = "";
-	$xmlquotes=("quotes.xml");
-	$xmlquotesDoc = new DOMDocument();
-	$xmlquotesDoc->load($xmlquotes);
-	$x=$xmlquotesDoc->getElementsByTagName('quote');
-	$xlen=$xmlquotesDoc->getElementsByTagName('quote')->length;
-	$quote = $x->item(rand(0, $xlen-1));
-	$retval = $retval ."<i>".$quote ->nodeValue."</i>";
-	$retval = $retval . "<br>-" . $quote->getAttribute('source');
+    try
+    {
+        $filename = "quotes.xml";
+
+        if (file_exists($filename))
+        {
+            $xmlquotes = ("quotes.xml");
+            $xmlquotesDoc = new DOMDocument();
+            $xmlquotesDoc->load($xmlquotes);
+            $x = $xmlquotesDoc->getElementsByTagName('quote');
+            $xlen = $xmlquotesDoc->getElementsByTagName('quote')->length;
+            $quote = $x->item(rand(0, $xlen - 1));
+            $retval = $retval . "<i>" . $quote->nodeValue . "</i>";
+            $retval = $retval . "<br>-" . $quote->getAttribute('source');
+        }
+        else
+        {
+            throw new Exception('Unable to find quotes.xml file');
+        }
+    }
+    catch (Exception $e)
+    {
+        $lognow = new DateTime();
+        $lognow->setTimezone(new DateTimeZone('America/Montreal'));
+        $GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')."
+            - ERROR - Unable to get random quote (".$e->getMessage().")</p>";
+    }
 	return $retval;
 }
 
