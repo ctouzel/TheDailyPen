@@ -40,7 +40,7 @@ $emailcontent = $emailcontent . "<p><img src='http://www.touzel.com/logo2.png' s
 $emailcontent = $emailcontent .GetRandomQuote();
 
 // THE WEATHER
-$emailcontent = $emailcontent ."<h3>". ReadWeather(true) . "</h3>";
+$emailcontent = $emailcontent ."<h3>". GetWeather(true) . "</h3>";
 
 $emailcontent = $emailcontent . "<h3>News</h3>";
 $headlines = array(

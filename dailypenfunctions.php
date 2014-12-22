@@ -12,7 +12,8 @@ function BuildTwitterAuthorizationHeader($oauth)
     try
     {
         $values = array();
-        foreach ($oauth as $key => $value) {
+        foreach ($oauth as $key => $value)
+        {
             $values[] = "$key=\"" . rawurlencode($value) . "\"";
         }
         $r .= implode(', ', $values);
@@ -30,13 +31,24 @@ function BuildTwitterAuthorizationHeader($oauth)
 // BUILD TWITTER BASE STRING
 function BuildTwitterBaseString($baseURI, $method, $params) 
 {
-    $r = array();
-    ksort($params);
-    foreach($params as $key=>$value)
-	{
-        $r[] = "$key=" . rawurlencode($value);
+    try
+    {
+        $r = array();
+        ksort($params);
+        foreach($params as $key=>$value)
+        {
+            $r[] = "$key=" . rawurlencode($value);
+        }
+        return $method."&" . rawurlencode($baseURI) . '&' . rawurlencode(implode('&', $r));
     }
-    return $method."&" . rawurlencode($baseURI) . '&' . rawurlencode(implode('&', $r));
+    catch (Exception $e)
+    {
+        $lognow = new DateTime();
+        $lognow->setTimezone(new DateTimeZone('America/Montreal'));
+        $GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')."
+            - ERROR - Unable to build twitter base string (".$e->getMessage().")</p>";
+        return "";
+    }
 }
 
 // GET HEADLINES FROM RSS
@@ -290,69 +302,65 @@ function ReadFromRSS_NoImage($feedsrc, $headerd, $max, $content, $dayinterval)
 }
 
 // READ WEATHER
-function ReadWeather($current)
+function GetWeather($current)
 {
 	$retval = "";
-	$currentweather = "";
-	$feed = new SimplePie();
-	$feed->set_feed_url("http://meteo.gc.ca/rss/city/qc-133_f.xml");
-	$feed->handle_content_type();
-	$feed->set_timeout(20);
-	$feed->enable_order_by_date(false);
-	$feed->set_cache_location($_SERVER['DOCUMENT_ROOT'] . '/cache');
-	$feed->init();
+    try {
+        $currentweather = "";
+        $feed = new SimplePie();
+        $feed->set_feed_url("http://meteo.gc.ca/rss/city/qc-133_f.xml");
+        $feed->handle_content_type();
+        $feed->set_timeout(20);
+        $feed->enable_order_by_date(false);
+        $feed->set_cache_location($_SERVER['DOCUMENT_ROOT'] . '/cache');
+        $feed->init();
 
-	for ($i=1; $i<6; $i++) 
-	{
-		$titleraw = $feed->get_item($i)->get_title();
-		if (stripos($titleraw, "Conditions actuelles")!==false)
-		{
-			$subtitle = str_replace("Conditions actuelles:", "", $titleraw);
-			if (strrpos($feed->get_item(0)->get_title(), "Aucune") === false) 
-			{ 
-			   $retval = "<h3>".$subtitle." / ".$feed->get_item(0)->get_title()."</h3>";
-			}
-			else
-			{
-				$retval = "<h3>".$subtitle."</h3>";
-			}
-			$currentweather = $subtitle;
-		}
-		else
-		{
-			$retval = $retval . "<h4>" . $feed->get_item($i)->get_title(). "</h4>";
-		}
-		$descraw = $feed->get_item($i)->get_description();
-		if (stripos($descraw,"Humidit&eacute;")!==false)
-		{
-			$descraw = substr($descraw,stripos($descraw,"Humidit&eacute;"));
-			$descraw = substr($descraw,0, stripos($descraw,"Cote"));
-			$descraw = str_replace("<b>", "", $descraw);
-			$descraw = str_replace("<br>", ", ", $descraw);
-		}
+        for ($i = 1; $i < 6; $i++) {
+            $titleraw = $feed->get_item($i)->get_title();
+            if (stripos($titleraw, "Conditions actuelles") !== false) {
+                $subtitle = str_replace("Conditions actuelles:", "", $titleraw);
+                if (strrpos($feed->get_item(0)->get_title(), "Aucune") === false) {
+                    $retval = "<h3>" . $subtitle . " / " . $feed->get_item(0)->get_title() . "</h3>";
+                } else {
+                    $retval = "<h3>" . $subtitle . "</h3>";
+                }
+                $currentweather = $subtitle;
+            } else {
+                $retval = $retval . "<h4>" . $feed->get_item($i)->get_title() . "</h4>";
+            }
+            $descraw = $feed->get_item($i)->get_description();
+            if (stripos($descraw, "Humidit&eacute;") !== false) {
+                $descraw = substr($descraw, stripos($descraw, "Humidit&eacute;"));
+                $descraw = substr($descraw, 0, stripos($descraw, "Cote"));
+                $descraw = str_replace("<b>", "", $descraw);
+                $descraw = str_replace("<br>", ", ", $descraw);
+            }
 
-		$finalstr = $descraw;
-		if (stripos($descraw,"Pr&eacute;visions")===false)
-		{
-			$retval = $retval . $descraw;
-		}
-		else
-		{
-			$pos = stripos($descraw,"Pr&eacute;visions");
-			$desc = substr($descraw,0,$pos);
-			$retval = $retval . $desc;
-		}
-		
-		if (stripos($finalstr,"Point de")!==false)
-		{
-			//$retval = $retval . $descraw;
-		}
-	}
+            $finalstr = $descraw;
+            if (stripos($descraw, "Pr&eacute;visions") === false) {
+                $retval = $retval . $descraw;
+            } else {
+                $pos = stripos($descraw, "Pr&eacute;visions");
+                $desc = substr($descraw, 0, $pos);
+                $retval = $retval . $desc;
+            }
 
-	if ($current)
-	{
-		$retval = $currentweather;
-	}
+            if (stripos($finalstr, "Point de") !== false) {
+                //$retval = $retval . $descraw;
+            }
+        }
+        if ($current)
+        {
+            $retval = $currentweather;
+        }
+    }
+    catch (Exception $e)
+    {
+        $lognow = new DateTime();
+        $lognow->setTimezone(new DateTimeZone('America/Montreal'));
+        $GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')."
+            - ERROR - Unable to retrieve weather (".$e->getMessage().")</p>";
+    }
 	return $retval;
 }
 
