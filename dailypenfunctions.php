@@ -54,19 +54,34 @@ function BuildTwitterBaseString($baseURI, $method, $params)
 // GET HEADLINES FROM RSS
 function GetHeadlinesFromRSS($feedsrc, $max, $dayinterval)
 {
-	$now = new DateTime();
-	$retval = "";
-	$feedobj = GetRSSObject($feedsrc);
-	$feedstamp = new DateTime($feedobj->get_item(0)->get_date());
-	$feedstamp->setTimezone(new DateTimeZone('America/Montreal'));
-	$since_start = floor(($now->format('U') - $feedstamp->format('U')) / (60*60*24));
-	if ($dayinterval=="-1" || $since_start<=$dayinterval)
-	{
-		for ($i=0; $i<$max; $i++) 
-		{
-			$retval = $retval . "<p>". $feedobj->get_item($i)->get_title(). "</p>";
-		}
-	}
+    $retval = "";
+    try
+    {
+        $now = new DateTime();
+
+        $feedobj = GetRSSObject($feedsrc);
+        $feedstamp = new DateTime($feedobj->get_item(0)->get_date());
+        $feedstamp->setTimezone(new DateTimeZone('America/Montreal'));
+        $since_start = floor(($now->format('U') - $feedstamp->format('U')) / (60*60*24));
+        if ($dayinterval=="-1" || $since_start<=$dayinterval)
+        {
+            for ($i=0; $i<$max; $i++)
+            {
+				if (is_null($feedobj->get_item($i)))
+				{
+					return "";
+				}
+                $retval = $retval . "<p>". $feedobj->get_item($i)->get_title(). "</p>";
+            }
+        }
+    }
+    catch (Exception $e)
+    {
+        $lognow = new DateTime();
+        $lognow->setTimezone(new DateTimeZone('America/Montreal'));
+        $GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')."
+            - ERROR - Unable to get headlines (".$e->getMessage().")</p>";
+    }
 	return $retval;
 }
 
@@ -305,6 +320,7 @@ function ReadFromRSS_NoImage($feedsrc, $headerd, $max, $content, $dayinterval)
 function GetWeather($current)
 {
 	$retval = "";
+	$quick = 0;
     try {
         $currentweather = "";
         $feed = new SimplePie();
@@ -320,13 +336,20 @@ function GetWeather($current)
             if (stripos($titleraw, "Conditions actuelles") !== false) {
                 $subtitle = str_replace("Conditions actuelles:", "", $titleraw);
                 if (strrpos($feed->get_item(0)->get_title(), "Aucune") === false) {
-                    $retval = "<h3>" . $subtitle . " / " . $feed->get_item(0)->get_title() . "</h3>";
+                    //$retval = "<h3>" . $subtitle . " / " . $feed->get_item(0)->get_title() . "</h3>";
                 } else {
-                    $retval = "<h3>" . $subtitle . "</h3>";
+                    //$retval = "<h3>" . $subtitle . "</h3>";
                 }
                 $currentweather = $subtitle;
             } else {
-                $retval = $retval . "<h4>" . $feed->get_item($i)->get_title() . "</h4>";
+				if ($quick == 1 || $quick == 2)
+				{
+					$sub = $feed->get_item($i)->get_title();
+					$pos = stripos($sub, ":");
+					$sub = substr($sub, 0, $pos);
+					$retval = $retval . "<b>" . $sub . " - </b>";
+				}
+                
             }
             $descraw = $feed->get_item($i)->get_description();
             if (stripos($descraw, "Humidit&eacute;") !== false) {
@@ -337,17 +360,22 @@ function GetWeather($current)
             }
 
             $finalstr = $descraw;
-            if (stripos($descraw, "Pr&eacute;visions") === false) {
-                $retval = $retval . $descraw;
-            } else {
-                $pos = stripos($descraw, "Pr&eacute;visions");
-                $desc = substr($descraw, 0, $pos);
-                $retval = $retval . $desc;
-            }
+			if ($quick == 1 || $quick == 2)
+			{
+				if (stripos($descraw, "Pr&eacute;visions") === false) {
+					$retval = $retval . $descraw;
+				} else {
+					$pos = stripos($descraw, "Pr&eacute;visions");
+					$desc = substr($descraw, 0, $pos);
+					$retval = $retval . $desc;
+				}
+			}
+
 
             if (stripos($finalstr, "Point de") !== false) {
                 //$retval = $retval . $descraw;
             }
+			$quick = $quick + 1;
         }
         if ($current)
         {
@@ -732,4 +760,424 @@ function GetTodoistTasks()
 	}
 	return $retval;
 }
+
+function GetLines($content, $max)
+{
+	$retval = "";
+	$count = $max - strlen($content);
+	for ($i=0; $i<$count; $i++) 
+	{
+		$retval = $retval." ";
+	}
+	return $retval;
+}
+
+// GET MLB SCORES
+function GetMLBScores()
+{
+	$retval = "";
+	libxml_use_internal_errors(true);
+	try
+	{	
+		$date_score = new DateTime();
+		if (date('H') < 11) 
+		{
+			$date_score->modify('-1 day');
+		}
+		$MLB_ONLINE_BASE_URL = "http://gd2.mlb.com/components/game/mlb/year_";
+		$Scores_URL = $MLB_ONLINE_BASE_URL.$date_score->format('Y');
+		$Scores_URL = $Scores_URL."/month_".$date_score->format('m');
+		$Scores_URL = $Scores_URL."/day_".$date_score->format('d');
+		$Scores_URL = $Scores_URL."/master_scoreboard.json";
+		
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $Scores_URL);
+		curl_setopt($ch, CURLOPT_HEADER, 0);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+		curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+		$output = curl_exec($ch);
+		
+		$parsed_json = json_decode($output);
+		$date_jour = $parsed_json->{'data'}->{'games'}->{'month'};
+		$games = $parsed_json->{'data'}->{'games'}->{'game'};
+
+		$font = 'cousine.ttf';
+		$fontsize = 14;
+		$imgcount = 1;
+		$imgname = 'fudding';
+		
+		$imgwidth = 1000;
+		$imgheight = 180;
+		$linemargin = 25;
+		$scorex = 300;
+		$hitsx = 380;
+		$errorsx = 420;
+		$statusx = 660;
+
+		foreach($games as $game) 
+		{
+			$liney = 20;
+			$lines = array();
+			
+			$im = imagecreatetruecolor($imgwidth, $imgheight);
+			$white = imagecolorallocate($im, 255, 255, 255);
+			$black = imagecolorallocate($im, 0, 0, 0);
+			imagefilledrectangle($im, 0, 0, $imgwidth-1, $imgheight-1, $white);
+		
+			$awaystr = $game->{'away_team_city'}." (".$game->{'away_win'}."-".$game->{'away_loss'}.")";
+			$homestr = $game->{'home_team_city'}." (".$game->{'home_win'}."-".$game->{'home_loss'}.")";
+			
+			$awayscore = $game->{'linescore'}->{'r'}->{'away'};
+			$homescore = $game->{'linescore'}->{'r'}->{'home'};
+			
+			$status = $game->{'status'}->{'ind'};
+			$statusSTR = $status;
+			if ($status == "S" || $status == "P")
+			{
+				$statusSTR = $game->{'time'};
+				$awaypitcher = $game->{'away_probable_pitcher'};
+				$homepitcher = $game->{'home_probable_pitcher'};
+				array_push($lines, $game->{'away_name_abbrev'}.": ".$awaypitcher->{'first'}." ".$awaypitcher->{'last'}." (".$awaypitcher->{'wins'}."-".$awaypitcher->{'losses'}.", ".$awaypitcher->{'era'}.")");
+				array_push($lines, $game->{'home_name_abbrev'}.": ".$homepitcher->{'first'}." ".$homepitcher->{'last'}." (".$homepitcher->{'wins'}."-".$homepitcher->{'losses'}.", ".$homepitcher->{'era'}.")");
+				array_push($lines, $game->{'venue'}.", ".$game->{'location'});
+			}
+			if ($status == "PW")
+			{
+				$statusSTR = "Warmup";
+				$awaypitcher = $game->{'away_probable_pitcher'};
+				$homepitcher = $game->{'home_probable_pitcher'};
+				array_push($lines, $game->{'away_name_abbrev'}.": ".$awaypitcher->{'first'}." ".$awaypitcher->{'last'}." (".$awaypitcher->{'wins'}."-".$awaypitcher->{'losses'}.", ".$awaypitcher->{'era'}.")");
+				array_push($lines, $game->{'home_name_abbrev'}.": ".$homepitcher->{'first'}." ".$homepitcher->{'last'}." (".$homepitcher->{'wins'}."-".$homepitcher->{'losses'}.", ".$homepitcher->{'era'}.")");
+				array_push($lines, $game->{'venue'}.", ".$game->{'location'});
+			}
+			if ($status == "I")
+			{
+				$statusSTR = "BOT".$game->{'status'}->{'inning'};
+				if ($game->{'status'}->{'top_inning'} == "Y")
+				{
+					$statusSTR = "TOP".$game->{'status'}->{'inning'};
+				}
+				$pitcher = $game->{'pitcher'};
+				$batter = $game->{'batter'};
+				$outs = $game->{'status'}->{'o'};
+				$outsline = $outs." outs";
+				if ($outs == "0")
+				{
+					$outsline = "No outs";
+				}
+				else if ($outs == "1")
+				{
+					$outsline = "One out";
+				}
+				$runners = $game->{'runners_on_base'}->{'status'};
+				$runnersStr = "Nobody on base. ";
+				if ($runners !== "0")
+				{
+					$runner1b = $game->{'runners_on_base'}->{'runner_on_1b'};
+					$runner2b = $game->{'runners_on_base'}->{'runner_on_2b'};
+					$runner3b = $game->{'runners_on_base'}->{'runner_on_3b'};
+					$runnersStr = "";
+					if (is_null($runner1b)==False && $runner1b->{'last'}!=="")
+					{
+						$runnersStr = $runner1b->{'last'}." on first. ";
+					}
+					if (is_null($runner2b)==False && $runner2b->{'last'}!=="")
+					{
+						$runnersStr = $runnersStr.$runner2b->{'last'}." on second. ";
+					}
+					if (is_null($runner3b)==False && $runner3b->{'last'}!=="")
+					{
+						$runnersStr = $runnersStr = $runnersStr.$runner3b->{'last'}." on third. ";
+					}
+				}
+				
+				$current = $runnersStr.$outsline;
+				$atbat = "Batter: ". $batter->{'first'}." ".$batter->{'last'}." (".$batter->{'h'}."/".$batter->{'ab'}.", ".$batter->{'avg'}.")";
+				$pitching = "Pitching: ". $pitcher->{'first'}." ".$pitcher->{'last'}. " (".$pitcher->{'ip'}." IP, ".$pitcher->{'er'}." ER, ".$pitcher->{'era'}.")";
+				array_push($lines, $current);
+				array_push($lines, $atbat);
+				array_push($lines, $pitching);
+			}
+
+			imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, $awaystr);
+			imagettftext($im, $fontsize, 0, $scorex, $liney, $black, $font, $game->{'linescore'}->{'r'}->{'away'});
+			imagettftext($im, $fontsize, 0, $hitsx, $liney, $black, $font, $game->{'linescore'}->{'h'}->{'away'});
+			imagettftext($im, $fontsize, 0, $errorsx, $liney, $black, $font, $game->{'linescore'}->{'e'}->{'away'});
+			imagettftext($im, $fontsize, 0, $statusx, $liney, $black, $font, $statusSTR);
+			$liney = $liney + $linemargin;
+			imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, $homestr);
+			imagettftext($im, $fontsize, 0, $scorex, $liney, $black, $font, $game->{'linescore'}->{'r'}->{'home'});
+			imagettftext($im, $fontsize, 0, $hitsx, $liney, $black, $font, $game->{'linescore'}->{'h'}->{'home'});
+			imagettftext($im, $fontsize, 0, $errorsx, $liney, $black, $font, $game->{'linescore'}->{'e'}->{'home'});
+			$liney = $liney + $linemargin + 10;
+			
+			if ($status=="F")
+			{
+				$line3 = "W: ".$game->{'winning_pitcher'}->{'first'}." ";
+				$line3 = $line3.$game->{'winning_pitcher'}->{'last'}." (";
+				$line3 = $line3.$game->{'winning_pitcher'}->{'wins'}."-";
+				$line3 = $line3.$game->{'winning_pitcher'}->{'losses'}.", ";
+				$line3 = $line3.$game->{'winning_pitcher'}->{'era'}.")";
+				
+				$line4 = "L: ".$game->{'losing_pitcher'}->{'first'}." ";
+				$line4 = $line4.$game->{'losing_pitcher'}->{'last'}." (";
+				$line4 = $line4.$game->{'losing_pitcher'}->{'wins'}."-";
+				$line4 = $line4.$game->{'losing_pitcher'}->{'losses'}.", ";
+				$line4 = $line4.$game->{'losing_pitcher'}->{'era'}.")";
+				array_push($lines, $line3);
+				array_push($lines, $line4);
+				if ($game->{'save_pitcher'}->{'first'}!=="")
+				{
+					$line5 = "S: ".$game->{'save_pitcher'}->{'first'}." ";
+					$line5 = $line5.$game->{'save_pitcher'}->{'last'}." (";
+					$line5 = $line5.$game->{'save_pitcher'}->{'saves'}.", ";
+					$line5 = $line5.$game->{'save_pitcher'}->{'era'}.")";
+					array_push($lines, $line5);
+				}
+			}
+			
+			// HOME RUNS
+			if ($status !== "S" && $status !== "P" && $status !== "PW")
+			{
+				$line6 = "HR: ";
+				$first = "0";
+				$homeruns = $game->{'home_runs'};
+				if (is_null($homeruns) ==  False)
+				{
+					$players = $homeruns->{'player'};
+					if (is_array($players) == True)
+					{
+						foreach ($players as $hr) 
+						{
+							if ($first == "0")
+							{
+								$first = "1";
+							}
+							else
+							{
+								$line6 = $line6 . ", ";
+							}
+							$line6 = $line6 . $hr->{'name_display_roster'}. " (".$hr->{'std_hr'}.")";
+						}
+					}
+					else
+					{
+						$line6 = $line6 . $players->{'name_display_roster'}. " (".$players->{'std_hr'}.")";
+					}
+				}
+
+
+				array_push($lines, $line6);
+			}
+			
+			foreach ($lines as $value) 
+			{
+				imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, $value);
+				$liney = $liney + $linemargin;
+			}
+			
+			$fullimgname = $imgname.strval($imgcount).'.png';
+			imagepng($im, $fullimgname);
+			imagedestroy($im);
+			echo "<p style='align:left'><img src='".$fullimgname."' border=1 width='".$imgwidth."' height='".$imgheight."'><br></p>";				
+			$imgcount = $imgcount + 1;
+		}
+	}
+	catch (Exception $e) 
+	{
+		$lognow = new DateTime();
+		$lognow->setTimezone(new DateTimeZone('America/Montreal'));
+		$GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')." - ERROR - Unable to get MLB Scores (".$e->getMessage().")</p>";
+	}
+	return $retval;
+}
+
+// GET MLB STANDINGS
+function GetMLBStandings()
+{
+	$standings = Array();
+
+	$font = 'cousine.ttf';
+	$fontsize = 14;
+	$imgcount = 1;
+	$imgname = 'standings.png';
+	$imgwidth = 800;
+	$imgheight = 180;
+	$linemargin = 25;
+
+	$liney = 20;
+	$lines = array();
+	
+	$im = imagecreatetruecolor($imgwidth, $imgheight);
+	$white = imagecolorallocate($im, 255, 255, 255);
+	$black = imagecolorallocate($im, 0, 0, 0);
+	imagefilledrectangle($im, 0, 0, $imgwidth-1, $imgheight-1, $white);
+		
+	$retval = "";
+	libxml_use_internal_errors(true);
+	try
+	{
+		$STANDINGS_URL = "http://www.cbssports.com/mlb/standings/regular";
+		// $WILDCARD_STANDINGS_URL = http://www.cbssports.com/mlb/standings/wildcard
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $STANDINGS_URL);
+		curl_setopt($ch, CURLOPT_HEADER, 0);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+		curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+		$output = curl_exec($ch);
+		$doc = new DOMDocument();
+		$doc->loadHTML($output);
+		$content = $doc->getElementById('pageRow');
+		$tables = $content ->getElementsByTagName('table');
+		$count = 0;
+
+		foreach($tables as $table) 
+		{
+			if ($count !== 0 && $count !== 4)
+			{
+				$standings_division = Array();
+				//echo "<h1>TABLE</h1>\r\n\r\n";
+				$rows = $table->getElementsByTagName('tr');
+				foreach ($rows as $row) 
+				{
+					$standings_team = Array();
+					$cols = $row->getElementsByTagName('td');
+					foreach ($cols as $col) 
+					{
+						array_push($standings_team, $col->C14N());
+						//echo $col->C14N()."...\r\n\r\n";
+					}
+					//echo "<h3>ROW</h3>\r\n";
+					array_push($standings_division, $standings_team);
+				}
+				array_push($standings, $standings_division);
+			}
+			$count = $count + 1;
+			
+		}
+		//var_dump($standings);
+
+		$liney = 20;
+		//$lines = array();
+		imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, "Standings");
+		$liney = $liney + $linemargin;
+		$count = 0;
+		foreach ($standings as $division) 
+		{
+			//var_dump($division);
+			echo "<h3>HOOO...".$division[0][0]."</h3>";
+			imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, "HOOOOOOOOO");
+			$liney = $liney + $linemargin;
+			if ($count > 7)
+			{
+				break;
+			}
+			$count = $count + 1;
+		}
+		
+		imagepng($im, $imgname);
+		imagedestroy($im);
+		echo "<p style='align:left'><img src='".$imgname."' border=1 width='".$imgwidth."' height='".$imgheight."'><br></p>";			
+
+	}
+	catch (Exception $e) 
+	{
+		$lognow = new DateTime();
+		$lognow->setTimezone(new DateTimeZone('America/Montreal'));
+		$GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')." - ERROR - Unable to get MLB Standings (".$e->getMessage().")</p>";
+	}
+	return $retval;
+}
+
+// GET MLB STATS
+function GetMLBStats()
+{
+	$stats = Array();
+
+	$font = 'cousine.ttf';
+	$fontsize = 14;
+	$imgcount = 1;
+	$imgname = 'stats.png';
+	$imgwidth = 800;
+	$imgheight = 280;
+	$linemargin = 25;
+	$selectedcol = 5;
+	
+	$im = imagecreatetruecolor($imgwidth, $imgheight);
+	$white = imagecolorallocate($im, 255, 255, 255);
+	$black = imagecolorallocate($im, 0, 0, 0);
+	imagefilledrectangle($im, 0, 0, $imgwidth-1, $imgheight-1, $white);
+	
+	$retval = "";
+	libxml_use_internal_errors(true);
+	try
+	{
+		//$STATS_URL = "http://www.cbssports.com/mlb/stats";
+		$STATS_URL = "http://www.cbssports.com/mlb/stats/playersort/sortableTable/al/year-2015-season-preseason-category-batting?:sort_col=10";
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $STATS_URL);
+		curl_setopt($ch, CURLOPT_HEADER, 0);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+		curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+		$output = curl_exec($ch);
+		$doc = new DOMDocument();
+		$doc->loadHTML($output);
+		$rows = $doc->getElementsByTagName('tr');
+		foreach($rows as $row) 
+		{
+			$player_stats = Array();
+			$cols = $row->getElementsByTagName('td');
+			foreach ($cols as $col) 
+			{
+				//var_dump($col);
+				//echo $col->C14N()."...\r\n\r\n";
+				$raw = $col->C14N();
+				$rawval = str_replace('<td align="left">', '', $raw);
+				$rawval = str_replace('<td align="center">', '', $rawval);
+				$rawval = str_replace('<td align="right">', '', $rawval);
+				$rawval = str_replace('</a>', '', $rawval);
+				$rawval = str_replace('</td>', '', $rawval);
+				$pos = stripos($rawval,">");
+				$desc = substr($rawval,$pos+1);
+				array_push($player_stats, $desc);
+			}
+			array_push($stats, $player_stats);
+		}
+		
+		
+		$liney = 20;
+		//$lines = array();
+		imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, "AL Home Run Leaders");
+		$liney = $liney + $linemargin;
+		$count = 0;
+		foreach ($stats as $stat) 
+		{
+			var_dump($stat);
+			imagettftext($im, $fontsize, 0, 0, $liney, $black, $font, $stat[0]);
+			$liney = $liney + $linemargin;
+			if ($count > 7)
+			{
+				break;
+			}
+			$count = $count + 1;
+		}
+		
+		imagepng($im, $imgname);
+		imagedestroy($im);
+		echo "<p style='align:left'><img src='".$imgname."' border=1 width='".$imgwidth."' height='".$imgheight."'><br></p>";
+	}
+	catch (Exception $e) 
+	{
+		$lognow = new DateTime();
+		$lognow->setTimezone(new DateTimeZone('America/Montreal'));
+		$GLOBALS['errors'] = $GLOBALS['errors'] . "<p>".$lognow->format('H:i:s')." - ERROR - Unable to get MLB Stats (".$e->getMessage().")</p>";
+	}
+	return $retval;
+}
+
+
+
 ?>
