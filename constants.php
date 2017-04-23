@@ -1,6 +1,6 @@
 <?php
 
-define("VERSION", "1.0.4.10012");
+define("VERSION", "1.0.4.10011");
 define("TITLE", "The Daily Pen");
 
 define("URL_WEATHER", "http://meteo.gc.ca/rss/city/qc-133_f.xml");
