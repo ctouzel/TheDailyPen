@@ -376,7 +376,6 @@ function GetValueIfExisting($class, $property)
 // GET MLB SCORES Tables
 function GetMLBScoresTables()
 {
-
 	libxml_use_internal_errors(true);
 	try
 	{
@@ -400,20 +399,18 @@ function GetMLBScoresTables()
 		$output = curl_exec($ch);
 
 		$parsed_json = json_decode($output);
-                if( isset( $parsed_json->{'data'}->{'games'}->{'game'} ) == FALSE)
-                {
-                    return;
-                }    
-                echo MARGIN4."<div id=\"mlbscores\">".PHP_EOL;
-                echo MARGIN5."<h2>MLB SCORES</h2>".PHP_EOL;
+		if( isset( $parsed_json->{'data'}->{'games'}->{'game'} ) == FALSE)
+		{
+			return;
+		}    
+		echo MARGIN4."<div id=\"mlbscores\">".PHP_EOL;
+		echo MARGIN5."<h2>MLB SCORES</h2>".PHP_EOL;
 		$games = $parsed_json->{'data'}->{'games'}->{'game'};
 
 		echo MARGIN5."<table>".PHP_EOL;
 		foreach($games as $game)
 		{
-
 			$lines = array();
-
 			$awaystr = "<b>".$game->{'away_team_city'}."</b> (".$game->{'away_win'}."-".$game->{'away_loss'}.")";
 			$homestr = "<b>".$game->{'home_team_city'}."</b> (".$game->{'home_win'}."-".$game->{'home_loss'}.")";
 

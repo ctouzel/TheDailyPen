@@ -31,8 +31,6 @@ echo GetDailyPenHeader(TITLE);
 echo MARGIN3 . "<div class=\"entry-content\">".PHP_EOL;
 echo MARGIN3 . "<section>".PHP_EOL;
 
-
-
 echo '<table border="0" cellspacing="20">';
 
 // ROW 1
