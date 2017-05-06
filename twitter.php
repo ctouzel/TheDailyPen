@@ -78,14 +78,19 @@ function GetTwitterTimeline()
 		$json = curl_exec($feed);
 		curl_close($feed);
 		$twitter_data = json_decode($json);
+		$count = 0;
 		foreach ($twitter_data as $tweet)
 		{
+			$count = $count + 1;
 			$text = $tweet->text;
             $text = str_replace("\r\n","", $text);
             $text = str_replace("\n","", $text);
             $text = str_replace("\r","", $text);
 			$author = $tweet->user->name;
-			$retval = $retval . MARGIN5. "<p>".$text . "<br/>-".$author."</p>".PHP_EOL;
+			if ($count < 11)
+			{
+				$retval = $retval . MARGIN5. "<p>".$text . "<br/>-".$author."</p>".PHP_EOL;
+			}
 		}
         $retval = $retval . MARGIN4. "</div>".PHP_EOL.PHP_EOL;
 	}
